@@ -21,7 +21,7 @@ A fast, minimal tool to fetch system info, written in Rust.
 1. Clone the repo:
 
 ```bash
-git clone https://github.com/your-username/rustor.git
+git clone https://github.com/Evren-os/rustor.git
 cd rustor
 ```
 
