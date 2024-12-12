@@ -2,6 +2,8 @@
 
 A fast, minimal tool to fetch system info, written in Rust.
 
+<img src="./assets/preview.png" alt="Alt text" width="500" height="350">
+
 ---
 
 ## Features
