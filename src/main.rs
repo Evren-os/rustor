@@ -109,7 +109,7 @@ fn get_os_age() -> String {
             if let Ok(install_datetime) =
                 NaiveDateTime::parse_from_str(timestamp_str, "%Y-%m-%d %H:%M:%S")
             {
-                let install_timestamp = install_datetime.timestamp() as u64;
+                let install_timestamp = install_datetime.and_utc().timestamp() as u64;
                 let current_timestamp = SystemTime::now()
                     .duration_since(UNIX_EPOCH)
                     .unwrap_or_default()
