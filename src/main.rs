@@ -1,7 +1,9 @@
-use std::process::Command;
-use std::fs;
 use std::env;
+use std::fs;
+use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
+
+use chrono::NaiveDateTime;
 
 fn main() {
     clear_terminal();
@@ -43,48 +45,41 @@ fn get_hostname() -> String {
 }
 
 fn get_kernel_info() -> String {
-    let output = Command::new("uname")
+    Command::new("uname")
         .arg("-r")
-        .output();
-    match output {
-        Ok(out) => String::from_utf8_lossy(&out.stdout).trim().to_string(),
-        Err(_) => "Unknown".to_string(),
-    }
+        .output()
+        .ok()
+        .and_then(|out| {
+            String::from_utf8(out.stdout)
+                .ok()
+                .map(|s| s.trim().to_string())
+        })
+        .unwrap_or_else(|| "Unknown".to_string())
 }
 
 fn get_os_name() -> String {
-    match fs::read_to_string("/etc/os-release") {
-        Ok(contents) => {
-            for line in contents.lines() {
-                if line.starts_with("PRETTY_NAME=") {
-                    return line
-                        .replace("PRETTY_NAME=", "")
-                        .trim_matches('"')
-                        .to_string();
-                }
+    if let Ok(contents) = fs::read_to_string("/etc/os-release") {
+        for line in contents.lines() {
+            if line.starts_with("PRETTY_NAME=") {
+                return line
+                    .replace("PRETTY_NAME=", "")
+                    .trim_matches('"')
+                    .to_string();
             }
-            "Unknown".to_string()
         }
-        Err(_) => "Unknown".to_string(),
     }
+    "Unknown".to_string()
 }
 
 fn get_uptime() -> String {
-    match fs::read_to_string("/proc/uptime") {
-        Ok(contents) => {
-            if let Some(first_line) = contents.lines().next() {
-                let secs: f64 = first_line.split_whitespace()
-                    .next()
-                    .unwrap_or("0")
-                    .parse()
-                    .unwrap_or(0.0);
-                format_uptime(secs)
-            } else {
-                "Unknown".to_string()
+    if let Ok(contents) = fs::read_to_string("/proc/uptime") {
+        if let Some(first_line) = contents.lines().next() {
+            if let Ok(secs) = first_line.split_whitespace().next().unwrap_or("0").parse::<f64>() {
+                return format_uptime(secs);
             }
         }
-        Err(_) => "Unknown".to_string(),
     }
+    "Unknown".to_string()
 }
 
 fn format_uptime(seconds: f64) -> String {
@@ -104,68 +99,55 @@ fn format_uptime(seconds: f64) -> String {
 fn get_os_age() -> String {
     let install_log_path = "/var/log/pacman.log";
 
-    let install_date_cmd = Command::new("sed")
-        .args(&["-n", "1p", install_log_path])
-        .output()
+    let first_line = fs::read_to_string(install_log_path)
         .ok()
-        .and_then(|out| String::from_utf8(out.stdout).ok())
-        .unwrap_or_default();
+        .and_then(|contents| contents.lines().next().map(|s| s.to_string()));
 
-    let install_date = install_date_cmd
-        .split_whitespace()
-        .nth(0)
-        .map(|date| date.trim_matches('[').trim_matches(']'))
-        .unwrap_or_default();
-
-    let install_date_seconds = Command::new("date")
-        .args(&["-d", install_date, "+%s"])
-        .output()
-        .ok()
-        .and_then(|out| String::from_utf8(out.stdout).ok())
-        .and_then(|secs| secs.trim().parse::<u64>().ok())
-        .unwrap_or(0);
-
-    let current_date = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs();
-
-    let days = (current_date - install_date_seconds) / 86400;
-
-    if days >= 365 {
-        format!("{}y {}d", days / 365, days % 365)
-    } else {
-        format!("{}d", days)
+    if let Some(line) = first_line {
+        if let (Some(start), Some(end)) = (line.find('['), line.find(']')) {
+            let timestamp_str = &line[start + 1..end];
+            if let Ok(install_datetime) =
+                NaiveDateTime::parse_from_str(timestamp_str, "%Y-%m-%d %H:%M:%S")
+            {
+                let install_timestamp = install_datetime.timestamp() as u64;
+                let current_timestamp = SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_secs();
+                let days = (current_timestamp - install_timestamp) / 86400;
+                if days >= 365 {
+                    return format!("{}y {}d", days / 365, days % 365);
+                } else {
+                    return format!("{}d", days);
+                }
+            }
+        }
     }
+    "Unknown".to_string()
 }
 
 fn get_memory_info() -> String {
-    match fs::read_to_string("/proc/meminfo") {
-        Ok(contents) => {
-            let mut total = 0;
-            let mut available = 0;
+    if let Ok(contents) = fs::read_to_string("/proc/meminfo") {
+        let mut total = 0;
+        let mut available = 0;
 
-            for line in contents.lines() {
-                if line.starts_with("MemTotal:") {
-                    total = extract_kb_value(line);
-                } else if line.starts_with("MemAvailable:") {
-                    available = extract_kb_value(line);
-                }
-
-                if total > 0 && available > 0 {
-                    break;
-                }
+        for line in contents.lines() {
+            if line.starts_with("MemTotal:") {
+                total = extract_kb_value(line);
+            } else if line.starts_with("MemAvailable:") {
+                available = extract_kb_value(line);
             }
-
-            if total > 0 {
-                let used = total - available;
-                format!("{:.2} GiB / {:.2} GiB", kb_to_gib(used), kb_to_gib(total))
-            } else {
-                "Unknown".to_string()
+            if total > 0 && available > 0 {
+                break;
             }
         }
-        Err(_) => "Unknown".to_string(),
+
+        if total > 0 {
+            let used = total.saturating_sub(available);
+            return format!("{:.2} GiB / {:.2} GiB", kb_to_gib(used), kb_to_gib(total));
+        }
     }
+    "Unknown".to_string()
 }
 
 fn extract_kb_value(line: &str) -> u64 {
