@@ -1,9 +1,17 @@
 use std::env;
 use std::fs;
+use std::io::BufRead;
+use std::path::Path;
 use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use chrono::NaiveDateTime;
+
+enum LogType {
+    Pacman,
+    Dpkg,
+    Installer,
+}
 
 fn main() {
     clear_terminal();
@@ -24,13 +32,13 @@ fn main() {
     let reset = "\x1b[0m";
 
     println!("\n    {}{}{}  ", vibrant_orange, os_name, reset);
-    println!("  =======================================\n");
+    println!("   =======================================\n");
     println!("  {}  User        :{} {}@{}", lively_green, reset, username, hostname);
     println!("  {}  Kernel      :{} {}", sky_blue, reset, kernel);
     println!("  {}  Uptime      :{} {}", vibrant_purple, reset, uptime);
     println!("  {}  OS Age      :{} {}", lively_pink, reset, os_age);
     println!("  {}溜 Memory      :{} {}", lively_green, reset, memory);
-    println!("\n  =======================================\n");
+    println!("\n   =======================================\n");
 }
 
 fn clear_terminal() {
@@ -97,33 +105,78 @@ fn format_uptime(seconds: f64) -> String {
 }
 
 fn get_os_age() -> String {
-    let install_log_path = "/var/log/pacman.log";
-
-    let first_line = fs::read_to_string(install_log_path)
-        .ok()
-        .and_then(|contents| contents.lines().next().map(|s| s.to_string()));
-
-    if let Some(line) = first_line {
-        if let (Some(start), Some(end)) = (line.find('['), line.find(']')) {
-            let timestamp_str = &line[start + 1..end];
-            if let Ok(install_datetime) =
-                NaiveDateTime::parse_from_str(timestamp_str, "%Y-%m-%d %H:%M:%S")
-            {
-                let install_timestamp = install_datetime.and_utc().timestamp() as u64;
-                let current_timestamp = SystemTime::now()
-                    .duration_since(UNIX_EPOCH)
-                    .unwrap_or_default()
-                    .as_secs();
-                let days = (current_timestamp - install_timestamp) / 86400;
-                if days >= 365 {
-                    return format!("{}y {}d", days / 365, days % 365);
-                } else {
-                    return format!("{}d", days);
+    let log_candidates = [
+        ("/var/log/pacman.log", LogType::Pacman),
+        ("/var/log/dpkg.log", LogType::Dpkg),
+        ("/var/log/installer/install.log", LogType::Installer),
+    ];
+    for (path, log_type) in log_candidates.iter() {
+        if Path::new(path).exists() {
+            if let Ok(file) = fs::File::open(path) {
+                let mut reader = std::io::BufReader::new(file);
+                let mut line = String::new();
+                if reader.read_line(&mut line).is_ok() && !line.trim().is_empty() {
+                    let maybe_dt = match log_type {
+                        LogType::Pacman => {
+                            if let (Some(start), Some(end)) = (line.find('['), line.find(']')) {
+                                let timestamp_str = &line[start + 1..end];
+                                NaiveDateTime::parse_from_str(timestamp_str, "%Y-%m-%d %H:%M:%S").ok()
+                            } else {
+                                None
+                            }
+                        }
+                        LogType::Dpkg => {
+                            if line.len() >= 19 {
+                                let timestamp_str = &line[0..19];
+                                NaiveDateTime::parse_from_str(timestamp_str, "%Y-%m-%d %H:%M:%S").ok()
+                            } else {
+                                None
+                            }
+                        }
+                        LogType::Installer => {
+                            let parts: Vec<&str> = line.split_whitespace().take(2).collect();
+                            if parts.len() >= 2 {
+                                let timestamp_str = parts.join(" ");
+                                NaiveDateTime::parse_from_str(&timestamp_str, "%Y-%m-%d %H:%M:%S").ok()
+                            } else {
+                                None
+                            }
+                        }
+                    };
+                    if let Some(install_datetime) = maybe_dt {
+                        return format_os_age_from_timestamp(install_datetime);
+                    }
                 }
             }
         }
     }
+    if let Ok(metadata) = fs::metadata("/") {
+        if let Ok(created) = metadata.created() {
+            if let Ok(duration) = created.duration_since(UNIX_EPOCH) {
+                let install_timestamp = duration.as_secs();
+                return format_os_age_from_unix(install_timestamp);
+            }
+        }
+    }
     "Unknown".to_string()
+}
+
+fn format_os_age_from_timestamp(install_datetime: NaiveDateTime) -> String {
+    let install_timestamp = install_datetime.timestamp() as u64;
+    format_os_age_from_unix(install_timestamp)
+}
+
+fn format_os_age_from_unix(install_timestamp: u64) -> String {
+    let current_timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+    let days = (current_timestamp - install_timestamp) / 86400;
+    if days >= 365 {
+        format!("{}y {}d", days / 365, days % 365)
+    } else {
+        format!("{}d", days)
+    }
 }
 
 fn get_memory_info() -> String {
