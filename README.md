@@ -44,3 +44,17 @@ Just run rustor to see your system info:
 ```bash
 rustor
 ```
+
+---
+
+## Performance
+
+`rustor` is designed for speed. Benchmarking with [Hyperfine](https://github.com/sharkdp/hyperfine) shows:
+
+```sh
+Benchmark 1: rustor
+  Time (mean ± σ):     896.3 µs ±  95.5 µs    [User: 330.0 µs, System: 698.2 µs]
+  Range (min … max):   661.9 µs … 1159.4 µs    1681 runs
+```
+
+This means `rustor` provides system information almost instantaneously.
