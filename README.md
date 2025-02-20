@@ -16,7 +16,15 @@ A fast, minimal tool to fetch system info, written in Rust.
 
 ## Installation
 
-### From Source
+### Via install script
+
+Run this command in terminal:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Evren-os/rustor/main/install.sh | bash
+```
+
+### From source
 
 1. Clone the repo:
 
