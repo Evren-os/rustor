@@ -6,8 +6,21 @@ A fast, minimal tool to fetch system info, written in Rust.
 
 ---
 
-## Features
+## Performance
 
+`rustor` is designed for speed. Benchmarking with [Hyperfine](https://github.com/sharkdp/hyperfine) shows:
+
+```sh
+Benchmark 1: rustor
+  Time (mean ± σ):     799.1 µs ± 113.8 µs    [User: 346.9 µs, System: 592.7 µs]
+  Range (min … max):   542.8 µs … 1748.3 µs    1681 runs
+```
+
+This means `rustor` provides system information almost instantaneously.
+
+---
+
+## Features
 - Clean, simple display of system info.
 - Blazing fast execution.
 - Built with Rust for speed and safety.
@@ -54,15 +67,3 @@ rustor
 ```
 
 ---
-
-## Performance
-
-`rustor` is designed for speed. Benchmarking with [Hyperfine](https://github.com/sharkdp/hyperfine) shows:
-
-```sh
-Benchmark 1: rustor
-  Time (mean ± σ):     896.3 µs ±  95.5 µs    [User: 330.0 µs, System: 698.2 µs]
-  Range (min … max):   661.9 µs … 1159.4 µs    1681 runs
-```
-
-This means `rustor` provides system information almost instantaneously.
