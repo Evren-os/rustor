@@ -16,7 +16,7 @@ Benchmark 1: rustor
   Range (min … max):   542.8 µs … 1748.3 µs    1681 runs
 ```
 
-This means `rustor` provides system information almost instantaneously.
+This means `rustor` takes about 0.0008 seconds (or 0.8 ms) on average to pull system info almost instantly.
 
 ---
 
