@@ -31,13 +31,13 @@ fn main() {
     let lively_pink = "\x1b[38;2;245;194;231m";
     let reset = "\x1b[0m";
 
-    println!("\n    {}{}{}  ", vibrant_orange, os_name, reset);
+    println!("\n     {}{}{}  ", vibrant_orange, os_name, reset);
     println!("   =======================================\n");
-    println!("  {}  User        :{} {}@{}", lively_green, reset, username, hostname);
-    println!("  {}  Kernel      :{} {}", sky_blue, reset, kernel);
-    println!("  {}  Uptime      :{} {}", vibrant_purple, reset, uptime);
-    println!("  {}  OS Age      :{} {}", lively_pink, reset, os_age);
-    println!("  {}溜 Memory      :{} {}", lively_green, reset, memory);
+    println!("  {}   User        :{} {}@{}", lively_green, reset, username, hostname);
+    println!("  {}   Kernel      :{} {}", sky_blue, reset, kernel);
+    println!("  {}   Uptime      :{} {}", vibrant_purple, reset, uptime);
+    println!("  {}󱦟   OS Age      :{} {}", lively_pink, reset, os_age);
+    println!("  {}   Memory      :{} {}", lively_green, reset, memory);
     println!("\n   =======================================\n");
 }
 
