@@ -1,7 +1,7 @@
 use std::env;
 use std::fs;
-use std::io::BufRead;
-use std::path::Path;
+use std::io::{BufRead, Write};
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -13,23 +13,96 @@ enum LogType {
     Installer,
 }
 
+// CACHING CONSTANTS & TYPES
+const CACHE_EXPIRY_SECS: u64 = 3600; // 1 hour TTL
+
+struct CacheData {
+    timestamp: u64,
+    hostname: String,
+    kernel:   String,
+    os_name:  String,
+    os_age:   String,
+}
+
+fn get_cache_file_path() -> Option<PathBuf> {
+    let cache_base = if let Ok(x) = env::var("XDG_CACHE_HOME") {
+        PathBuf::from(x)
+    } else if let Ok(home) = env::var("HOME") {
+        PathBuf::from(home).join(".cache")
+    } else {
+        return None;
+    };
+    let dir = cache_base.join("rustor");
+    if fs::create_dir_all(&dir).is_err() {
+        return None;
+    }
+    Some(dir.join("cache.txt"))
+}
+
+fn load_cache() -> Option<CacheData> {
+    let path = get_cache_file_path()?;
+    let s    = fs::read_to_string(&path).ok()?;
+    let mut lines     = s.lines();
+    let timestamp     = lines.next()?.parse::<u64>().ok()?;
+    let now           = SystemTime::now().duration_since(UNIX_EPOCH).ok()?.as_secs();
+    if now > timestamp + CACHE_EXPIRY_SECS {
+        return None;
+    }
+    let hostname = lines.next()?.strip_prefix("hostname=").map(str::to_string)?;
+    let kernel   = lines.next()?.strip_prefix("kernel=").map(str::to_string)?;
+    let os_name  = lines.next()?.strip_prefix("os_name=").map(str::to_string)?;
+    let os_age   = lines.next()?.strip_prefix("os_age=").map(str::to_string)?;
+    Some(CacheData { timestamp, hostname, kernel, os_name, os_age })
+}
+
+fn save_cache(data: &CacheData) {
+    if let Some(path) = get_cache_file_path() {
+        if let Ok(mut file) = fs::File::create(path) {
+            let _ = writeln!(file, "{}", data.timestamp);
+            let _ = writeln!(file, "hostname={}", data.hostname);
+            let _ = writeln!(file, "kernel={}", data.kernel);
+            let _ = writeln!(file, "os_name={}", data.os_name);
+            let _ = writeln!(file, "os_age={}", data.os_age);
+        }
+    }
+}
+
 fn main() {
     clear_terminal();
 
+    // Try to pull in cached values
+    let cache = load_cache();
+
     let username = env::var("USER").unwrap_or_else(|_| "Unknown".to_string());
-    let hostname = get_hostname();
-    let kernel = get_kernel_info();
-    let os_name = get_os_name();
-    let uptime = get_uptime();
-    let os_age = get_os_age();
-    let memory = get_memory_info();
+    let hostname = if let Some(ref c) = cache { c.hostname.clone() } else { get_hostname() };
+    let kernel   = if let Some(ref c) = cache { c.kernel.clone()   } else { get_kernel_info() };
+    let os_name  = if let Some(ref c) = cache { c.os_name.clone()  } else { get_os_name() };
+    let uptime   = get_uptime();
+    let os_age   = if let Some(ref c) = cache { c.os_age.clone()   } else { get_os_age() };
+    let memory   = get_memory_info();
+
+    // If there was no valid cache, save it for next run
+    if cache.is_none() {
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+        let new_cache = CacheData {
+            timestamp: now,
+            hostname:  hostname.clone(),
+            kernel:    kernel.clone(),
+            os_name:   os_name.clone(),
+            os_age:    os_age.clone(),
+        };
+        save_cache(&new_cache);
+    }
 
     let vibrant_orange = "\x1b[38;2;255;184;108m";
-    let lively_green = "\x1b[38;2;166;227;161m";
-    let sky_blue = "\x1b[38;2;137;220;235m";
-    let vibrant_purple = "\x1b[38;2;203;166;247m";
-    let lively_pink = "\x1b[38;2;245;194;231m";
-    let reset = "\x1b[0m";
+    let lively_green   = "\x1b[38;2;166;227;161m";
+    let sky_blue        = "\x1b[38;2;137;220;235m";
+    let vibrant_purple  = "\x1b[38;2;203;166;247m";
+    let lively_pink     = "\x1b[38;2;245;194;231m";
+    let reset           = "\x1b[0m";
 
     println!("\n     {}{}{}  ", vibrant_orange, os_name, reset);
     println!("   =======================================\n");
@@ -91,8 +164,8 @@ fn get_uptime() -> String {
 }
 
 fn format_uptime(seconds: f64) -> String {
-    let days = (seconds / 86400.0).floor() as u64;
-    let hours = ((seconds % 86400.0) / 3600.0).floor() as u64;
+    let days    = (seconds / 86400.0).floor() as u64;
+    let hours   = ((seconds % 86400.0) / 3600.0).floor() as u64;
     let minutes = ((seconds % 3600.0) / 60.0).floor() as u64;
 
     if days > 0 {
@@ -107,28 +180,28 @@ fn format_uptime(seconds: f64) -> String {
 fn get_os_age() -> String {
     let log_candidates = [
         ("/var/log/pacman.log", LogType::Pacman),
-        ("/var/log/dpkg.log", LogType::Dpkg),
+        ("/var/log/dpkg.log",   LogType::Dpkg),
         ("/var/log/installer/install.log", LogType::Installer),
     ];
     for (path, log_type) in log_candidates.iter() {
         if Path::new(path).exists() {
             if let Ok(file) = fs::File::open(path) {
                 let mut reader = std::io::BufReader::new(file);
-                let mut line = String::new();
+                let mut line   = String::new();
                 if reader.read_line(&mut line).is_ok() && !line.trim().is_empty() {
                     let maybe_dt = match log_type {
                         LogType::Pacman => {
-                            if let (Some(start), Some(end)) = (line.find('['), line.find(']')) {
-                                let timestamp_str = &line[start + 1..end];
-                                NaiveDateTime::parse_from_str(timestamp_str, "%Y-%m-%d %H:%M:%S").ok()
+                            if let (Some(s), Some(e)) = (line.find('['), line.find(']')) {
+                                let ts = &line[s + 1..e];
+                                NaiveDateTime::parse_from_str(ts, "%Y-%m-%d %H:%M:%S").ok()
                             } else {
                                 None
                             }
                         }
                         LogType::Dpkg => {
                             if line.len() >= 19 {
-                                let timestamp_str = &line[0..19];
-                                NaiveDateTime::parse_from_str(timestamp_str, "%Y-%m-%d %H:%M:%S").ok()
+                                let ts = &line[0..19];
+                                NaiveDateTime::parse_from_str(ts, "%Y-%m-%d %H:%M:%S").ok()
                             } else {
                                 None
                             }
@@ -136,25 +209,25 @@ fn get_os_age() -> String {
                         LogType::Installer => {
                             let parts: Vec<&str> = line.split_whitespace().take(2).collect();
                             if parts.len() >= 2 {
-                                let timestamp_str = parts.join(" ");
-                                NaiveDateTime::parse_from_str(&timestamp_str, "%Y-%m-%d %H:%M:%S").ok()
+                                NaiveDateTime::parse_from_str(&parts.join(" "), "%Y-%m-%d %H:%M:%S").ok()
                             } else {
                                 None
                             }
                         }
                     };
-                    if let Some(install_datetime) = maybe_dt {
-                        return format_os_age_from_timestamp(install_datetime);
+                    if let Some(dt) = maybe_dt {
+                        return format_os_age_from_timestamp(dt);
                     }
                 }
             }
         }
     }
-    if let Ok(metadata) = fs::metadata("/") {
-        if let Ok(created) = metadata.created() {
-            if let Ok(duration) = created.duration_since(UNIX_EPOCH) {
-                let install_timestamp = duration.as_secs();
-                return format_os_age_from_unix(install_timestamp);
+
+    // Fallback to filesystem creation time
+    if let Ok(meta) = fs::metadata("/") {
+        if let Ok(created) = meta.created() {
+            if let Ok(dur) = created.duration_since(UNIX_EPOCH) {
+                return format_os_age_from_unix(dur.as_secs());
             }
         }
     }
@@ -162,16 +235,16 @@ fn get_os_age() -> String {
 }
 
 fn format_os_age_from_timestamp(install_datetime: NaiveDateTime) -> String {
-    let install_timestamp = install_datetime.timestamp() as u64;
-    format_os_age_from_unix(install_timestamp)
+    let ts = install_datetime.timestamp() as u64;
+    format_os_age_from_unix(ts)
 }
 
 fn format_os_age_from_unix(install_timestamp: u64) -> String {
-    let current_timestamp = SystemTime::now()
+    let current = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .as_secs();
-    let days = (current_timestamp - install_timestamp) / 86400;
+    let days    = (current - install_timestamp) / 86400;
     if days >= 365 {
         format!("{}y {}d", days / 365, days % 365)
     } else {
@@ -181,7 +254,7 @@ fn format_os_age_from_unix(install_timestamp: u64) -> String {
 
 fn get_memory_info() -> String {
     if let Ok(contents) = fs::read_to_string("/proc/meminfo") {
-        let mut total = 0;
+        let mut total     = 0;
         let mut available = 0;
 
         for line in contents.lines() {
