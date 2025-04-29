@@ -2,9 +2,9 @@
 
 A fast, minimal tool to fetch system info, written in Rust.
 
-<img src="./assets/preview.png" alt="Alt text" width="500" height="350">
-
----
+<p align="center">
+  <img src="./assets/preview.png" alt="Rustor preview" />
+</p>
 
 ## Performance
 
@@ -18,52 +18,29 @@ Benchmark 1: rustor
 
 This means `rustor` takes about 0.0008 seconds (or 0.8 ms) on average to pull system info almost instantly.
 
----
-
 ## Features
 - Clean, simple display of system info.
 - Blazing fast execution.
 - Built with Rust for speed and safety.
 
----
-
 ## Installation
-
-### Via install script
 
 Run this command in terminal:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Evren-os/rustor/main/install.sh | bash
 ```
-
-### From source
-
-1. Clone the repo:
+or manually
 
 ```bash
 git clone https://github.com/Evren-os/rustor.git
 cd rustor
-```
-
-2. Build it:
-
-```bash
 cargo build --release
-```
-
-3. Install:
-
-```bash
 sudo mv ./target/release/rustor /usr/local/bin/
 ```
-
 ### Usage
 
 Just run rustor to see your system info:
-
 ```bash
 rustor
 ```
-
----
