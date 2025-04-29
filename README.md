@@ -1,46 +1,35 @@
 # Rustor
 
-A fast, minimal tool to fetch system info, written in Rust.
+A blazing-fast, minimal CLI for your system info.
 
-<p align="center">
-  <img src="./assets/preview.png" alt="Rustor preview" />
-</p>
+[![Preview](./assets/preview.png)](./assets/preview.png)
 
-## Performance
-
-`rustor` is designed for speed. Benchmarking with [Hyperfine](https://github.com/sharkdp/hyperfine) shows:
-
-```sh
-Benchmark 1: rustor
-  Time (mean ± σ):     799.1 µs ± 113.8 µs    [User: 346.9 µs, System: 592.7 µs]
-  Range (min … max):   542.8 µs … 1748.3 µs    1681 runs
-```
-
-This means `rustor` takes about 0.0008 seconds (or 0.8 ms) on average to pull system info almost instantly.
+## Why Rustor?
+- ⚡ <1 ms startup (smart 1 h cache)
+- 🌈 Modern ANSI colors
+- 🤝 Cross-distro OS-age detection (pacman, dpkg, installer logs, or fs fallback)
 
 ## Features
-- Clean, simple display of system info.
-- Blazing fast execution.
-- Built with Rust for speed and safety.
+- 👤 User & Hostname  
+- 🐧 Kernel version  
+- ⏱️ Uptime (d h m)  
+- 📆 OS age (from logs or filesystem)  
+- 💾 Memory usage (GiB)  
+- 🔄 Smart caching (TTL 1 h)
 
-## Installation
-
-Run this command in terminal:
-
+## Install
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Evren-os/rustor/main/install.sh | bash
 ```
-or manually
-
+or
 ```bash
 git clone https://github.com/Evren-os/rustor.git
 cd rustor
 cargo build --release
-sudo mv ./target/release/rustor /usr/local/bin/
+sudo mv target/release/rustor /usr/local/bin/
 ```
-### Usage
 
-Just run rustor to see your system info:
+## Usage
 ```bash
 rustor
 ```
