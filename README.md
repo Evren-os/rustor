@@ -26,7 +26,7 @@ or
 git clone https://github.com/Evren-os/rustor.git
 cd rustor
 cargo build --release
-sudo mv target/release/rustor /usr/local/bin/
+mv target/release/rustor ~/.local/bin/
 ```
 
 ## Usage
